@@ -1,0 +1,1205 @@
+---
+title: "text_preprocessing"
+output:
+  pdf_document: default
+  html_document: default
+---
+except for the overview data, all tables must be transferred form wide to lng format:
+* gastro
+* med_text
+* okverslag
+* verpl_txt
+* vitals_abp_auto: done
+* vitals_abp_man: done
+* vitals_af_auto/man: done
+* vitals_hf_hr_auto/man: done
+* vitals_hf_pr_man: done
+* vitals_rr_auto-/man: done
+* vitals_temp_auto/man: done
+
+data pipeline:
+* save colnames in vec
+* select values for observations
+* pivot
+* throw out NA's
+* split timestamps and values
+* Clean timestamp and value strings
+* check for empty values and delete
+* write table
+
+# read long format data tabels
+```{r}
+vitals_abp_man_pivot <- dbReadTable(con, "long_vitals_abp_man")
+vitals_abp_auto_pivot <- dbReadTable(con, "long_vitals_abp_auto")
+vitals_af_auto_pivot <- dbReadTable(con, "long_vitals_af_auto")
+vitals_af_man_pivot <- dbReadTable(con, "long_vitals_af_man")
+vitals_hf_hr_auto_pivot <- dbReadTable(con, "long_vitals_hf_hr_auto")
+vitals_hf_hr_man_pivot <- dbReadTable(con, "long_vitals_hf_hr_man")
+vitals_hf_pr_man_pivot <- dbReadTable(con, "long_vitals_hf_pr_man")
+vitals_rr_auto_pivot <- dbReadTable(con, "long_vitals_rr_auto")
+vitals_rr_man_pivot <- dbReadTable(con, "long_vitals_rr_man")
+vitals_temp_auto_pivot <- dbReadTable(con, "long_vitals_temp_auto")
+vitals_temp_man_pivot <- dbReadTable(con, "long_vitals_temp_man")
+lab_pivot <- dbReadTable(con, "long_lab")
+long_str_comp <- dbReadTable(con, "long_structured_complete")
+target_index <- dbReadTable(con, "complication_indexes")
+```
+
+
+# vitals_abp_man
+20 measures per day, each in separate column
+```{r}
+#separate string of column names with commas and add quotation marks
+vec <- "ABP1_dag1,ABP2_dag1,ABP3_dag1,ABP4_dag1,ABP5_dag1,ABP6_dag1,ABP7_dag1,ABP8_dag1,ABP9_dag1,ABP10_dag1,ABP11_dag1,ABP12_dag1,ABP13_dag1,ABP14_dag1,ABP15_dag1,ABP16_dag1,ABP17_dag1,ABP18_dag1,ABP19_dag1,ABP20_dag1,ABP1_dag2,ABP2_dag2,ABP3_dag2,ABP4_dag2,ABP5_dag2,ABP6_dag2,ABP7_dag2,ABP8_dag2,ABP9_dag2,ABP10_dag2,ABP11_dag2,ABP12_dag2,ABP13_dag2,ABP14_dag2,ABP15_dag2,ABP16_dag2,ABP17_dag2,ABP18_dag2,ABP19_dag2,ABP20_dag2,ABP1_dag3,ABP2_dag3,ABP3_dag3,ABP4_dag3,ABP5_dag3,ABP6_dag3,ABP7_dag3,ABP8_dag3,ABP9_dag3,ABP10_dag3,ABP11_dag3,ABP12_dag3,ABP13_dag3,ABP14_dag3,ABP15_dag3,ABP16_dag3,ABP17_dag3,ABP18_dag3,ABP19_dag3,ABP20_dag3,ABP1_dag4,ABP2_dag4,ABP3_dag4,ABP4_dag4,ABP5_dag4,ABP6_dag4,ABP7_dag4,ABP8_dag4,ABP9_dag4,ABP10_dag4,ABP11_dag4,ABP12_dag4,ABP13_dag4,ABP14_dag4,ABP15_dag4,ABP16_dag4,ABP17_dag4,ABP18_dag4,ABP19_dag4,ABP20_dag4,ABP1_dag5,ABP2_dag5,ABP3_dag5,ABP4_dag5,ABP5_dag5,ABP6_dag5,ABP7_dag5,ABP8_dag5,ABP9_dag5,ABP10_dag5,ABP11_dag5,ABP12_dag5,ABP13_dag5,ABP14_dag5,ABP15_dag5,ABP16_dag5,ABP17_dag5,ABP18_dag5,ABP19_dag5,ABP20_dag5,ABP1_dag6,ABP2_dag6,ABP3_dag6,ABP4_dag6,ABP5_dag6,ABP6_dag6,ABP7_dag6,ABP8_dag6,ABP9_dag6,ABP10_dag6,ABP11_dag6,ABP12_dag6,ABP13_dag6,ABP14_dag6,ABP15_dag6,ABP16_dag6,ABP17_dag6,ABP18_dag6,ABP19_dag6,ABP20_dag6,ABP1_dag7,ABP2_dag7,ABP3_dag7,ABP4_dag7,ABP5_dag7,ABP6_dag7,ABP7_dag7,ABP8_dag7,ABP9_dag7,ABP10_dag7,ABP11_dag7,ABP12_dag7,ABP13_dag7,ABP14_dag7,ABP15_dag7,ABP16_dag7,ABP17_dag7,ABP18_dag7,ABP19_dag7,ABP20_dag7,ABP1_dag8,ABP2_dag8,ABP3_dag8,ABP4_dag8,ABP5_dag8,ABP6_dag8,ABP7_dag8,ABP8_dag8,ABP9_dag8,ABP10_dag8,ABP11_dag8,ABP12_dag8,ABP13_dag8,ABP14_dag8,ABP15_dag8,ABP16_dag8,ABP17_dag8,ABP18_dag8,ABP19_dag8,ABP20_dag8,ABP1_dag9,ABP2_dag9,ABP3_dag9,ABP4_dag9,ABP5_dag9,ABP6_dag9,ABP7_dag9,ABP8_dag9,ABP9_dag9,ABP10_dag9,ABP11_dag9,ABP12_dag9,ABP13_dag9,ABP14_dag9,ABP15_dag9,ABP16_dag9,ABP17_dag9,ABP18_dag9,ABP19_dag9,ABP20_dag9,ABP1_dag10,ABP2_dag10,ABP3_dag10,ABP4_dag10,ABP5_dag10,ABP6_dag10,ABP7_dag10,ABP8_dag10,ABP9_dag10,ABP10_dag10,ABP11_dag10,ABP12_dag10,ABP13_dag10,ABP14_dag10,ABP15_dag10,ABP16_dag10,ABP17_dag10,ABP18_dag10,ABP19_dag10,ABP20_dag10,ABP1_dag11,ABP2_dag11,ABP3_dag11,ABP4_dag11,ABP5_dag11,ABP6_dag11,ABP7_dag11,ABP8_dag11,ABP9_dag11,ABP10_dag11,ABP11_dag11,ABP12_dag11,ABP13_dag11,ABP14_dag11,ABP15_dag11,ABP16_dag11,ABP17_dag11,ABP18_dag11,ABP19_dag11,ABP20_dag11,ABP1_dag12,ABP2_dag12,ABP3_dag12,ABP4_dag12,ABP5_dag12,ABP6_dag12,ABP7_dag12,ABP8_dag12,ABP9_dag12,ABP10_dag12,ABP11_dag12,ABP12_dag12,ABP13_dag12,ABP14_dag12,ABP15_dag12,ABP16_dag12,ABP17_dag12,ABP18_dag12,ABP19_dag12,ABP20_dag12,ABP1_dag13,ABP2_dag13,ABP3_dag13,ABP4_dag13,ABP5_dag13,ABP6_dag13,ABP7_dag13,ABP8_dag13,ABP9_dag13,ABP10_dag13,ABP11_dag13,ABP12_dag13,ABP13_dag13,ABP14_dag13,ABP15_dag13,ABP16_dag13,ABP17_dag13,ABP18_dag13,ABP19_dag13,ABP20_dag13,ABP1_dag14,ABP2_dag14,ABP3_dag14,ABP4_dag14,ABP5_dag14,ABP6_dag14,ABP7_dag14,ABP8_dag14,ABP9_dag14,ABP10_dag14,ABP11_dag14,ABP12_dag14,ABP13_dag14,ABP14_dag14,ABP15_dag14,ABP16_dag14,ABP17_dag14,ABP18_dag14,ABP19_dag14,ABP20_dag14"
+
+vec %>%
+  str_split(",") %>%
+  `[[`(1) %>%
+  str_replace_all("\\b", "'") %>%
+  str_flatten(collapse = ",")
+```
+
+```{r}
+#pivot
+abp_man_colnames <-(colnames(vitals_abp_man)) #save colnames in vec
+abp_man_colnames <- abp_man_colnames[4:283] #delete non relvant colnames
+
+vitals_abp_man_pivot <- vitals_abp_man %>% 
+  pivot_longer(cols = all_of(abp_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+
+```
+resulted in 126.000 rows, but many have NA's in values column. After deleting NA's, 9629 rows are left.  
+
+```{r}
+vitals_abp_man_pivot = vitals_abp_man_pivot[!is.na(vitals_abp_man_pivot$value),] #keep only non-NA values
+```
+
+```{r}
+## separate timestamp from value
+vitals_abp_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_abp_man_pivot$value <- 
+  substr(vitals_abp_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_abp_man_pivot$value)- 1))
+vitals_abp_man_pivot$timestamp <- 
+  substr(vitals_abp_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+# extract numeric value
+vitals_abp_man_pivot$value <- str_remove(vitals_abp_man_pivot$value, "/.+") #keep only parentheses and values
+vitals_abp_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_abp_man_pivot$day <- vitals_abp_man_pivot$measure #copy measure col
+vitals_abp_man_pivot$day <- str_extract(vitals_abp_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_abp_man_pivot$day <- str_extract(vitals_abp_man_pivot$day, "\\d+") # keep only number
+vitals_abp_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_abp_man_pivot$date <- vitals_abp_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_abp_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_abp_man_pivot$date <- vitals_abp_man_pivot$date + vitals_abp_man_pivot$day
+# concatenate date and timestamp
+vitals_abp_man_pivot$time <- vitals_abp_man_pivot$timestamp #copy time value
+vitals_abp_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_abp_man_pivot$measure_count <- vitals_abp_man_pivot$measure #copy
+vitals_abp_man_pivot$measure_count <- str_extract(vitals_abp_man_pivot$measure_count, "ABP\\d+")
+vitals_abp_man_pivot$measure_count <- str_extract(vitals_abp_man_pivot$measure_count, "\\d+")
+vitals_abp_man_pivot$measure_count <- as.numeric(vitals_abp_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to ABP_man
+vitals_abp_man_pivot$measure <- "ABP_manual"
+
+#select relevant columns 
+vitals_abp_man_pivot <- vitals_abp_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+```
+
+
+```{r}
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_abp_man"), vitals_abp_man_pivot, overwrite=TRUE, row.names=FALSE)
+# <- dbReadTable(con, "long_vitals_abp_man")
+```
+
+
+# vitals_abp_auto
+pivoting resulted in 151.200 rows and 5 variables. Deleting NA's resulted in 17.468 rows. Empty string in "value" where deleted too. Ended up with 16994 rows. 
+```{r}
+abp_auto_colnames <-(colnames(vitals_abp_auto)) #save colnames in vec
+abp_auto_colnames <- abp_auto_colnames[4:339] #delete non relvant colnames
+## pivot from wide to long format
+vitals_abp_auto_pivot <- vitals_abp_auto %>%
+  pivot_longer(cols = all_of(abp_auto_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_abp_auto_pivot = vitals_abp_auto_pivot[!is.na(vitals_abp_auto_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_abp_auto_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_abp_auto_pivot$value <- 
+  substr(vitals_abp_auto_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_abp_auto_pivot$value)- 1))
+vitals_abp_auto_pivot$timestamp <- 
+  substr(vitals_abp_auto_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_abp_auto_pivot$value[vitals_abp_auto_pivot$value==""] <- NA
+vitals_abp_auto_pivot = vitals_abp_auto_pivot[!is.na(vitals_abp_auto_pivot$value),] #keep only non-NA values
+
+
+vitals_abp_auto_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_abp_auto_pivot$day <- vitals_abp_auto_pivot$measure #copy measure col
+vitals_abp_auto_pivot$day <- str_extract(vitals_abp_auto_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_abp_auto_pivot$day <- str_extract(vitals_abp_auto_pivot$day, "\\d+") # keep only number
+vitals_abp_auto_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_abp_auto_pivot$date <- vitals_abp_auto_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_abp_auto_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_abp_auto_pivot$date <- vitals_abp_auto_pivot$date + vitals_abp_auto_pivot$day
+# concatenate date and timestamp
+vitals_abp_auto_pivot$time <- vitals_abp_auto_pivot$timestamp #copy time value
+vitals_abp_auto_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_abp_auto_pivot$measure_count <- vitals_abp_auto_pivot$measure #copy
+vitals_abp_auto_pivot$measure_count <- str_extract(vitals_abp_auto_pivot$measure_count, "ABP\\d+")
+vitals_abp_auto_pivot$measure_count <- str_extract(vitals_abp_auto_pivot$measure_count, "\\d+")
+vitals_abp_auto_pivot$measure_count <- as.numeric(vitals_abp_auto_pivot$measure_count)
+
+# change measure string from ABP#_dag# to ABP_auto
+vitals_abp_auto_pivot$measure <- "ABP_auto"
+
+#select relevant columns 
+vitals_abp_auto_pivot <- vitals_abp_auto_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_abp_auto"), vitals_abp_auto_pivot, overwrite=TRUE, row.names=FALSE)
+test <- dbReadTable(con, "long_vitals_abp_auto")
+```
+
+
+# vitals_af_auto
+pivot: 151.2000 values. After deleting NA's: 22.863
+```{r}
+af_auto_colnames <-(colnames(vitals_af_auto)) #save colnames in vec
+af_auto_colnames <- af_auto_colnames[4:339] #delete non relvant colnames
+## pivot from wide to long format
+vitals_af_auto_pivot <- vitals_af_auto %>%
+  pivot_longer(cols = all_of(af_auto_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_af_auto_pivot = vitals_af_auto_pivot[!is.na(vitals_af_auto_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_af_auto_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_af_auto_pivot$value <- 
+  substr(vitals_af_auto_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_af_auto_pivot$value)- 1))
+vitals_af_auto_pivot$timestamp <- 
+  substr(vitals_af_auto_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_af_auto_pivot$value[vitals_af_auto_pivot$value==""] <- NA
+vitals_af_auto_pivot = vitals_af_auto_pivot[!is.na(vitals_af_auto_pivot$value),] #keep only non-NA values
+
+
+vitals_af_auto_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_af_auto_pivot$day <- vitals_af_auto_pivot$measure #copy measure col
+vitals_af_auto_pivot$day <- str_extract(vitals_af_auto_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_af_auto_pivot$day <- str_extract(vitals_af_auto_pivot$day, "\\d+") # keep only number
+vitals_af_auto_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_af_auto_pivot$date <- vitals_af_auto_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_af_auto_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_af_auto_pivot$date <- vitals_af_auto_pivot$date + vitals_af_auto_pivot$day
+# concatenate date and timestamp
+vitals_af_auto_pivot$time <- vitals_af_auto_pivot$timestamp #copy time value
+vitals_af_auto_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_af_auto_pivot$measure_count <- vitals_af_auto_pivot$measure #copy
+vitals_af_auto_pivot$measure_count <- str_extract(vitals_af_auto_pivot$measure_count, "AF\\d+")
+vitals_af_auto_pivot$measure_count <- str_extract(vitals_af_auto_pivot$measure_count, "\\d+")
+vitals_af_auto_pivot$measure_count <- as.numeric(vitals_af_auto_pivot$measure_count)
+
+# change measure string from ABP#_dag# to af_auto
+vitals_af_auto_pivot$measure <- "AF_auto"
+
+#select relevant columns 
+vitals_af_auto_pivot <- vitals_af_auto_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_af_auto"), vitals_af_auto_pivot, overwrite=TRUE, row.names=FALSE)
+test <- dbReadTable(con, "long_vitals_af_auto")
+```
+
+# vitals_af_man
+pivot: 126.000 values. After deleting NA's: 18.043
+```{r}
+af_man_colnames <-(colnames(vitals_af_man)) #save colnames in vec
+af_man_colnames <- af_man_colnames[4:283] #delete non relvant colnames
+## pivot from wide to long format
+vitals_af_man_pivot <- vitals_af_man %>%
+  pivot_longer(cols = all_of(af_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_af_man_pivot = vitals_af_man_pivot[!is.na(vitals_af_man_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_af_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_af_man_pivot$value <- 
+  substr(vitals_af_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_af_man_pivot$value)- 1))
+vitals_af_man_pivot$timestamp <- 
+  substr(vitals_af_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_af_man_pivot$value[vitals_af_man_pivot$value==""] <- NA
+vitals_af_man_pivot = vitals_af_man_pivot[!is.na(vitals_af_man_pivot$value),] #keep only non-NA values
+
+
+vitals_af_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_af_man_pivot$day <- vitals_af_man_pivot$measure #copy measure col
+vitals_af_man_pivot$day <- str_extract(vitals_af_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_af_man_pivot$day <- str_extract(vitals_af_man_pivot$day, "\\d+") # keep only number
+vitals_af_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_af_man_pivot$date <- vitals_af_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_af_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_af_man_pivot$date <- vitals_af_man_pivot$date + vitals_af_man_pivot$day
+# concatenate date and timestamp
+vitals_af_man_pivot$time <- vitals_af_man_pivot$timestamp #copy time value
+vitals_af_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_af_man_pivot$measure_count <- vitals_af_man_pivot$measure #copy
+vitals_af_man_pivot$measure_count <- str_extract(vitals_af_man_pivot$measure_count, "AF\\d+")
+vitals_af_man_pivot$measure_count <- str_extract(vitals_af_man_pivot$measure_count, "\\d+")
+vitals_af_man_pivot$measure_count <- as.numeric(vitals_af_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to af_man
+vitals_af_man_pivot$measure <- "AF_manual"
+
+#select relevant columns 
+vitals_af_man_pivot <- vitals_af_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_af_man"), vitals_af_man_pivot, overwrite=TRUE, row.names=FALSE)
+test <- dbReadTable(con, "long_vitals_af_man")
+```
+
+# vitals_hf_hr_auto
+pivot: 129.600 values. After deleting NA's: 23.488
+```{r}
+hf_hr_auto_colnames <-(colnames(vitals_hf_hr_auto)) #save colnames in vec
+hf_hr_auto_colnames <- hf_hr_auto_colnames[4:291] #delete non relvant colnames
+## pivot from wide to long format
+vitals_hf_hr_auto_pivot <- vitals_hf_hr_auto %>%
+  pivot_longer(cols = all_of(hf_hr_auto_colnames),
+               names_to = "measure",
+               values_to = "value")
+
+vitals_hf_hr_auto_pivot = vitals_hf_hr_auto_pivot[!is.na(vitals_hf_hr_auto_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_hf_hr_auto_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_hf_hr_auto_pivot$value <- 
+  substr(vitals_hf_hr_auto_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_hf_hr_auto_pivot$value)- 1))
+vitals_hf_hr_auto_pivot$timestamp <- 
+  substr(vitals_hf_hr_auto_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_hf_hr_auto_pivot$value[vitals_hf_hr_auto_pivot$value==""] <- NA
+vitals_hf_hr_auto_pivot = vitals_hf_hr_auto_pivot[!is.na(vitals_hf_hr_auto_pivot$value),] #keep only non-NA values
+
+
+vitals_hf_hr_auto_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_hf_hr_auto_pivot$day <- vitals_hf_hr_auto_pivot$measure #copy measure col
+vitals_hf_hr_auto_pivot$day <- str_extract(vitals_hf_hr_auto_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_hf_hr_auto_pivot$day <- str_extract(vitals_hf_hr_auto_pivot$day, "\\d+") # keep only number
+vitals_hf_hr_auto_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_hf_hr_auto_pivot$date <- vitals_hf_hr_auto_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_hf_hr_auto_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_hf_hr_auto_pivot$date <- vitals_hf_hr_auto_pivot$date + vitals_hf_hr_auto_pivot$day
+# concatenate date and timestamp
+vitals_hf_hr_auto_pivot$time <- vitals_hf_hr_auto_pivot$timestamp #copy time value
+vitals_hf_hr_auto_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_hf_hr_auto_pivot$measure_count <- vitals_hf_hr_auto_pivot$measure #copy
+vitals_hf_hr_auto_pivot$measure_count <- str_extract(vitals_hf_hr_auto_pivot$measure_count, "HF\\d+")
+vitals_hf_hr_auto_pivot$measure_count <- str_extract(vitals_hf_hr_auto_pivot$measure_count, "\\d+")
+vitals_hf_hr_auto_pivot$measure_count <- as.numeric(vitals_hf_hr_auto_pivot$measure_count)
+
+# change measure string from ABP#_dag# to hf_hr_auto
+vitals_hf_hr_auto_pivot$measure <- "HF_HR_auto"
+
+#select relevant columns 
+vitals_hf_hr_auto_pivot <- vitals_hf_hr_auto_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_hf_hr_auto"), vitals_hf_hr_auto_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_hf_hr_auto_pivot <- dbReadTable(con, "long_vitals_hf_hr_auto")
+```
+
+# vitals_hf_hr_auto
+126.000 values. After deleting NA's: 12.925
+```{r}
+hf_hr_man_colnames <-(colnames(vitals_hf_hr_man)) #save colnames in vec
+hf_hr_man_colnames <- hf_hr_man_colnames[4:283] #delete non relvant colnames
+## pivot from wide to long format
+vitals_hf_hr_man_pivot <- vitals_hf_hr_man %>%
+  pivot_longer(cols = all_of(hf_hr_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+
+vitals_hf_hr_man_pivot = vitals_hf_hr_man_pivot[!is.na(vitals_hf_hr_man_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_hf_hr_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_hf_hr_man_pivot$value <- 
+  substr(vitals_hf_hr_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_hf_hr_man_pivot$value)- 1))
+vitals_hf_hr_man_pivot$timestamp <- 
+  substr(vitals_hf_hr_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_hf_hr_man_pivot$value[vitals_hf_hr_man_pivot$value==""] <- NA
+vitals_hf_hr_man_pivot <- vitals_hf_hr_man_pivot[!is.na(as.numeric(as.character(vitals_hf_hr_man_pivot$value))),] # some complex code to delete non-numeric characters 
+vitals_hf_hr_man_pivot = vitals_hf_hr_man_pivot[!is.na(vitals_hf_hr_man_pivot$value),] #keep only non-NA values
+
+vitals_hf_hr_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_hf_hr_man_pivot$day <- vitals_hf_hr_man_pivot$measure #copy measure col
+vitals_hf_hr_man_pivot$day <- str_extract(vitals_hf_hr_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_hf_hr_man_pivot$day <- str_extract(vitals_hf_hr_man_pivot$day, "\\d+") # keep only number
+vitals_hf_hr_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_hf_hr_man_pivot$date <- vitals_hf_hr_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_hf_hr_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_hf_hr_man_pivot$date <- vitals_hf_hr_man_pivot$date + vitals_hf_hr_man_pivot$day
+# concatenate date and timestamp
+vitals_hf_hr_man_pivot$time <- vitals_hf_hr_man_pivot$timestamp #copy time value
+vitals_hf_hr_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_hf_hr_man_pivot$measure_count <- vitals_hf_hr_man_pivot$measure #copy
+vitals_hf_hr_man_pivot$measure_count <- str_extract(vitals_hf_hr_man_pivot$measure_count, "HF\\d+")
+vitals_hf_hr_man_pivot$measure_count <- str_extract(vitals_hf_hr_man_pivot$measure_count, "\\d+")
+vitals_hf_hr_man_pivot$measure_count <- as.numeric(vitals_hf_hr_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to hf_hr_man
+vitals_hf_hr_man_pivot$measure <- "HF_HR_man"
+
+#select relevant columns 
+vitals_hf_hr_man_pivot <- vitals_hf_hr_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_hf_hr_man"), vitals_hf_hr_man_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_hf_hr_man_pivot <- dbReadTable(con, "long_vitals_hf_hr_man")
+```
+
+# vitals_hf_hr_pr_man
+94.500 values. 11.971 after.
+```{r}
+hf_pr_man_colnames <-(colnames(vitals_hf_pr_man)) #save colnames in vec
+hf_pr_man_colnames <- hf_pr_man_colnames[4:213] #delete non relvant colnames
+## pivot from wide to long format
+vitals_hf_pr_man_pivot <- vitals_hf_pr_man %>%
+  pivot_longer(cols = all_of(hf_pr_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_hf_pr_man_pivot = vitals_hf_pr_man_pivot[!is.na(vitals_hf_pr_man_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_hf_pr_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_hf_pr_man_pivot$value <- 
+  substr(vitals_hf_pr_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_hf_pr_man_pivot$value)- 1))
+vitals_hf_pr_man_pivot$timestamp <- 
+  substr(vitals_hf_pr_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_hf_pr_man_pivot$value[vitals_hf_pr_man_pivot$value==""] <- NA
+vitals_hf_pr_man_pivot <- vitals_hf_pr_man_pivot[!is.na(as.numeric(as.character(vitals_hf_pr_man_pivot$value))),] # some complex code to delete non-numeric characters 
+vitals_hf_pr_man_pivot = vitals_hf_pr_man_pivot[!is.na(vitals_hf_pr_man_pivot$value),] #keep only non-NA values
+
+
+vitals_hf_pr_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_hf_pr_man_pivot$day <- vitals_hf_pr_man_pivot$measure #copy measure col
+vitals_hf_pr_man_pivot$day <- str_extract(vitals_hf_pr_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_hf_pr_man_pivot$day <- str_extract(vitals_hf_pr_man_pivot$day, "\\d+") # keep only number
+vitals_hf_pr_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_hf_pr_man_pivot$date <- vitals_hf_pr_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_hf_pr_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_hf_pr_man_pivot$date <- vitals_hf_pr_man_pivot$date + vitals_hf_pr_man_pivot$day
+# concatenate date and timestamp
+vitals_hf_pr_man_pivot$time <- vitals_hf_pr_man_pivot$timestamp #copy time value
+vitals_hf_pr_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_hf_pr_man_pivot$measure_count <- vitals_hf_pr_man_pivot$measure #copy
+vitals_hf_pr_man_pivot$measure_count <- str_extract(vitals_hf_pr_man_pivot$measure_count, "HF\\d+")
+vitals_hf_pr_man_pivot$measure_count <- str_extract(vitals_hf_pr_man_pivot$measure_count, "\\d+")
+vitals_hf_pr_man_pivot$measure_count <- as.numeric(vitals_hf_pr_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to hf_pr_man
+vitals_hf_pr_man_pivot$measure <- "HF_PR_manual"
+
+#select relevant columns 
+vitals_hf_pr_man_pivot <- vitals_hf_pr_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_hf_pr_man"), vitals_hf_pr_man_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_hf_pr_man_pivot <- dbReadTable(con, "long_vitals_hf_pr_man")
+
+```
+
+# vitals_rr_auto
+129.600. 1264
+```{r}
+rr_auto_colnames <-(colnames(vitals_rr_auto)) #save colnames in vec
+rr_auto_colnames <- rr_auto_colnames[4:291] #delete non relvant colnames
+## pivot from wide to long format
+vitals_rr_auto_pivot <- vitals_rr_auto %>%
+  pivot_longer(cols = all_of(rr_auto_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_rr_auto_pivot = vitals_rr_auto_pivot[!is.na(vitals_rr_auto_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_rr_auto_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_rr_auto_pivot$value <- 
+  substr(vitals_rr_auto_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_rr_auto_pivot$value)- 1))
+vitals_rr_auto_pivot$timestamp <- 
+  substr(vitals_rr_auto_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_rr_auto_pivot$value[vitals_rr_auto_pivot$value==""] <- NA
+vitals_rr_auto_pivot = vitals_rr_auto_pivot[!is.na(vitals_rr_auto_pivot$value),] #keep only non-NA values
+
+
+vitals_rr_auto_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_rr_auto_pivot$day <- vitals_rr_auto_pivot$measure #copy measure col
+vitals_rr_auto_pivot$day <- str_extract(vitals_rr_auto_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_rr_auto_pivot$day <- str_extract(vitals_rr_auto_pivot$day, "\\d+") # keep only number
+vitals_rr_auto_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_rr_auto_pivot$date <- vitals_rr_auto_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_rr_auto_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_rr_auto_pivot$date <- vitals_rr_auto_pivot$date + vitals_rr_auto_pivot$day
+# concatenate date and timestamp
+vitals_rr_auto_pivot$time <- vitals_rr_auto_pivot$timestamp #copy time value
+vitals_rr_auto_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_rr_auto_pivot$measure_count <- vitals_rr_auto_pivot$measure #copy
+vitals_rr_auto_pivot$measure_count <- str_extract(vitals_rr_auto_pivot$measure_count, "RRsys\\d+")
+vitals_rr_auto_pivot$measure_count <- str_extract(vitals_rr_auto_pivot$measure_count, "\\d+")
+vitals_rr_auto_pivot$measure_count <- as.numeric(vitals_rr_auto_pivot$measure_count)
+
+# change measure string from ABP#_dag# to rr_auto
+vitals_rr_auto_pivot$measure <- "RR_auto"
+
+#select relevant columns 
+vitals_rr_auto_pivot <- vitals_rr_auto_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_rr_auto"), vitals_rr_auto_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_rr_auto_pivot <- dbReadTable(con, "long_vitals_rr_auto")
+```
+
+# vitals_rr_man
+126.000. 16.489
+```{r}
+rr_man_colnames <-(colnames(vitals_rr_man)) #save colnames in vec
+rr_man_colnames <- rr_man_colnames[4:283] #delete non relvant colnames
+## pivot from wide to long format
+vitals_rr_man_pivot <- vitals_rr_man %>%
+  pivot_longer(cols = all_of(rr_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_rr_man_pivot = vitals_rr_man_pivot[!is.na(vitals_rr_man_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_rr_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_rr_man_pivot$value <- 
+  substr(vitals_rr_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_rr_man_pivot$value)- 1))
+vitals_rr_man_pivot$timestamp <- 
+  substr(vitals_rr_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_rr_man_pivot$value[vitals_rr_man_pivot$value==""] <- NA
+vitals_rr_man_pivot <- vitals_rr_man_pivot[!is.na(as.numeric(as.character(vitals_rr_man_pivot$value))),] # some complex code to delete non-numeric characters 
+vitals_rr_man_pivot = vitals_rr_man_pivot[!is.na(vitals_rr_man_pivot$value),] #keep only non-NA values
+
+
+vitals_rr_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_rr_man_pivot$day <- vitals_rr_man_pivot$measure #copy measure col
+vitals_rr_man_pivot$day <- str_extract(vitals_rr_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_rr_man_pivot$day <- str_extract(vitals_rr_man_pivot$day, "\\d+") # keep only number
+vitals_rr_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_rr_man_pivot$date <- vitals_rr_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_rr_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_rr_man_pivot$date <- vitals_rr_man_pivot$date + vitals_rr_man_pivot$day
+# concatenate date and timestamp
+vitals_rr_man_pivot$time <- vitals_rr_man_pivot$timestamp #copy time value
+vitals_rr_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_rr_man_pivot$measure_count <- vitals_rr_man_pivot$measure #copy
+vitals_rr_man_pivot$measure_count <- str_extract(vitals_rr_man_pivot$measure_count, "RRsys\\d+")
+vitals_rr_man_pivot$measure_count <- str_extract(vitals_rr_man_pivot$measure_count, "\\d+")
+vitals_rr_man_pivot$measure_count <- as.numeric(vitals_rr_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to rr_man
+vitals_rr_man_pivot$measure <- "RR_manual"
+
+#select relevant columns 
+vitals_rr_man_pivot <- vitals_rr_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_rr_man"), vitals_rr_man_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_rr_man_pivot <- dbReadTable(con, "long_vitals_rr_man")
+```
+
+# vitals_temp_auto
+129.600. 20.356.
+```{r}
+temp_auto_colnames <-(colnames(vitals_temp_auto)) #save colnames in vec
+temp_auto_colnames <- temp_auto_colnames[4:291] #delete non relvant colnames
+## pivot from wide to long format
+vitals_temp_auto_pivot <- vitals_temp_auto %>%
+  pivot_longer(cols = all_of(temp_auto_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_temp_auto_pivot = vitals_temp_auto_pivot[!is.na(vitals_temp_auto_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_temp_auto_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_temp_auto_pivot$value <- 
+  substr(vitals_temp_auto_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_temp_auto_pivot$value)- 1))
+vitals_temp_auto_pivot$timestamp <- 
+  substr(vitals_temp_auto_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_temp_auto_pivot$value[vitals_temp_auto_pivot$value==""] <- NA
+vitals_temp_auto_pivot = vitals_temp_auto_pivot[!is.na(vitals_temp_auto_pivot$value),] #keep only non-NA values
+
+
+vitals_temp_auto_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_temp_auto_pivot$day <- vitals_temp_auto_pivot$measure #copy measure col
+vitals_temp_auto_pivot$day <- str_extract(vitals_temp_auto_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_temp_auto_pivot$day <- str_extract(vitals_temp_auto_pivot$day, "\\d+") # keep only number
+vitals_temp_auto_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_temp_auto_pivot$date <- vitals_temp_auto_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_temp_auto_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_temp_auto_pivot$date <- vitals_temp_auto_pivot$date + vitals_temp_auto_pivot$day
+# concatenate date and timestamp
+vitals_temp_auto_pivot$time <- vitals_temp_auto_pivot$timestamp #copy time value
+vitals_temp_auto_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_temp_auto_pivot$measure_count <- vitals_temp_auto_pivot$measure #copy
+vitals_temp_auto_pivot$measure_count <- str_extract(vitals_temp_auto_pivot$measure_count, "temp\\d+")
+vitals_temp_auto_pivot$measure_count <- str_extract(vitals_temp_auto_pivot$measure_count, "\\d+")
+vitals_temp_auto_pivot$measure_count <- as.numeric(vitals_temp_auto_pivot$measure_count)
+
+# change measure string from ABP#_dag# to temp_auto
+vitals_temp_auto_pivot$measure <- "TEMP_auto"
+
+#select relevant columns 
+vitals_temp_auto_pivot <- vitals_temp_auto_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_temp_auto"), vitals_temp_auto_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_temp_auto_pivot <- dbReadTable(con, "long_vitals_temp_auto")
+```
+
+# vitals_temp_man
+126.000 . 21.630
+```{r}
+temp_man_colnames <-(colnames(vitals_temp_man)) #save colnames in vec
+temp_man_colnames <- temp_man_colnames[4:283] #delete non relvant colnames
+## pivot from wide to long format
+vitals_temp_man_pivot <- vitals_temp_man %>%
+  pivot_longer(cols = all_of(temp_man_colnames),
+               names_to = "measure",
+               values_to = "value")
+vitals_temp_man_pivot = vitals_temp_man_pivot[!is.na(vitals_temp_man_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+vitals_temp_man_pivot  %<>% 
+  separate(value, c("value", "timestamp"), sep=";")
+## clean_string data
+## from <val=108/61(77)>;<t=01:56:15> to 108/61(77) and 01:56:15
+vitals_temp_man_pivot$value <- 
+  substr(vitals_temp_man_pivot$value, 
+         start = 6, 
+         stop = (nchar(vitals_temp_man_pivot$value)- 1))
+vitals_temp_man_pivot$timestamp <- 
+  substr(vitals_temp_man_pivot$timestamp, 
+         start = 4, 
+         stop = 11)
+
+#some columns are empty, replace with NA to delete later
+vitals_temp_man_pivot$value[vitals_temp_man_pivot$value==""] <- NA
+vitals_temp_man_pivot <- vitals_temp_man_pivot[!is.na(as.numeric(as.character(vitals_temp_man_pivot$value))),] # some complex code to delete non-numeric characters 
+vitals_temp_man_pivot = vitals_temp_man_pivot[!is.na(vitals_temp_man_pivot$value),] #keep only non-NA values
+
+
+vitals_temp_man_pivot %<>%  #make numeric
+  mutate(value = as.numeric(value))
+
+# create datevalues for the measures by adding the day in the measure value to the date of operation and concatenating date and time
+## extract daynumber from measure
+vitals_temp_man_pivot$day <- vitals_temp_man_pivot$measure #copy measure col
+vitals_temp_man_pivot$day <- str_extract(vitals_temp_man_pivot$day, "dag\\d+") #keep only day and number from ABP##_dag##
+vitals_temp_man_pivot$day <- str_extract(vitals_temp_man_pivot$day, "\\d+") # keep only number
+vitals_temp_man_pivot %<>%
+  mutate(day = as.numeric(day))
+
+# transform operatiedatum to date value
+vitals_temp_man_pivot$date <- vitals_temp_man_pivot$Datum_operatie_nieuw # coperate operatiedate
+vitals_temp_man_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+vitals_temp_man_pivot$date <- vitals_temp_man_pivot$date + vitals_temp_man_pivot$day
+# concatenate date and timestamp
+vitals_temp_man_pivot$time <- vitals_temp_man_pivot$timestamp #copy time value
+vitals_temp_man_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+#make measure count variable
+vitals_temp_man_pivot$measure_count <- vitals_temp_man_pivot$measure #copy
+vitals_temp_man_pivot$measure_count <- str_extract(vitals_temp_man_pivot$measure_count, "temp\\d+")
+vitals_temp_man_pivot$measure_count <- str_extract(vitals_temp_man_pivot$measure_count, "\\d+")
+vitals_temp_man_pivot$measure_count <- as.numeric(vitals_temp_man_pivot$measure_count)
+
+# change measure string from ABP#_dag# to temp_man
+vitals_temp_man_pivot$measure <- "TEMP_manual"
+
+#select relevant columns 
+vitals_temp_man_pivot <- vitals_temp_man_pivot[c("Case_number", "Pt_nummer", "measure", "value", "timestamp","day", "measure_count")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_temp_man"), vitals_temp_man_pivot, overwrite=TRUE, row.names=FALSE)
+vitals_temp_man_pivot <- dbReadTable(con, "long_vitals_temp_man")
+```
+
+
+# gastro
+concatenate columns
+pivot
+split columns
+9000 after pivot.150 after deleting NA's
+```{r}
+#concatenate columns
+gastro$gastro_1 <- paste(gastro$verslag_dat_1, gastro$monster_dat_1, gastro$verslag_1, sep = "|")
+gastro$gastro_2 <- paste(gastro$verslag_dat_2, gastro$monster_dat_2, gastro$verslag_2, sep = "|")
+gastro$gastro_3 <- paste(gastro$verslag_dat_3, gastro$monster_dat_3, gastro$verslag_3, sep = "|")
+gastro$gastro_4 <- paste(gastro$verslag_dat_4, gastro$monster_dat_4, gastro$verslag_4, sep = "|")
+gastro$gastro_5 <- paste(gastro$verslag_dat_5, gastro$monster_dat_5, gastro$verslag_5, sep = "|")
+
+gastro <- gastro[c("Datum_operatie_nieuw", "gastro_1", "gastro_2", "gastro_3", "gastro_4", "gastro_5")]
+#Pivot
+gastro_colnames <-(colnames(gastro)) #save colnames in vec
+gastro_colnames <- gastro_colnames[2:6] #delete non relvant colnames
+## pivot from wide to long format
+gastro_pivot <- gastro %>%
+  pivot_longer(cols = all_of(gastro_colnames),
+               names_to = "measure",
+               values_to = "value")
+
+gastro_pivot$value[gastro_pivot$value=="NA|NA|NA"] <- NA
+gastro_pivot = gastro_pivot[!is.na(gastro_pivot$value),] #keep only non-NA values
+
+## separate timestamp from value
+gastro_pivot  %<>% 
+  separate(value, c("verslag_datum", "monster_datum", "report"), sep="\\|")
+
+
+
+
+#make measure count variable
+gastro_pivot$measure_count <- gastro_pivot$measure #copy column
+gastro_pivot$measure_count <- str_extract(gastro_pivot$measure_count, "\\d") #keep digit
+gastro_pivot$measure_count <- as.numeric(gastro_pivot$measure_count) #make numeric
+
+gastro_pivot$measure <- "gastro" #replace measure values
+
+gastro_pivot$date <- gastro_pivot$verslag_datum #make date variable
+
+
+#select relevant columns 
+gastro_pivot <- gastro_pivot[c("Datum_operatie_nieuw", "measure", "date", "measure_count", "report")]
+
+## write table
+dbWriteTable(con, SQL("dbo.long_gastro"), gastro_pivot, overwrite=TRUE, row.names=FALSE)
+test <- dbReadTable(con, "long_gastro")
+
+verk
+getwd()
+```
+
+# med_txt
+after pivot 6750 observations. After deleting NA's 5335 observations, this was the number of days that letter were included for all patients together.
+After the letters were split, data was pivoted again (one letter per row) and NA's were deleted, we had 50318 observarions. After some data cleaning (faulty data) 49391 letters were left. After deleting the non-relevant letters, 34039 observations were left.
+
+* pivot data: done
+* save letter type in column: done
+* delete non-relevant letter rows
+* save timestamp in column: done
+* sort by patient, time
+* Count # letter
+
+Types of letters: Algemeen, Behandeling, Anamnese, Conclusie, Decursus, Beleid, Recentste bepaling, Klinisch beloop, Observaties, Lichamelijk onderzoek, Aanvullend onderzoek, Behandeling (dag0)
+
+Relevant letters:
+* Algemeen: General progress report (very important! if long. Short example: <24-1-2012 11:01> <Algemeen>Gerapporteerd door: Irza ten Seldam</Algemeen>
+)
+* Anamnese: sometimes overlap with Algemeen, sometimes repeat of facts (background and current medication)
+* Conclusie: very important! summary of general wellbeing and outcomes.
+* Decursus: only if it does not refer to day and surgery
+* Lichamelijk onderzoek: repeat of measurements, conclusion of measurement or additional like abdomen.
+* Aanvullend onderzoek: fact of additional examination is important indicator
+
+Non-relevant letters:
+* Behandeling: contains surgeon and surgery type
+* Conclusie on day0
+* Beleid: it's a plan, not a report
+* Recentste bepaling: repeatof measurements. 
+* Observaties: often refers to type of observation or repeats other information
+
+To discuss:
+* klinisch beloop
+```{r}
+
+#Pivot
+med_txt_colnames <-(colnames(med_txt)) #save colnames in vec
+med_txt_colnames <- med_txt_colnames[5:19] #delete non relvant colnames
+
+## pivot from wide to long format
+med_txt_pivot <- med_txt %>%
+  pivot_longer(cols = all_of(med_txt_colnames),
+               names_to = "day",
+               values_to = "text")
+
+med_txt_pivot$text[med_txt_pivot$text == ""] <- NA #replace empty fields with NA's
+med_txt_pivot = med_txt_pivot[!is.na(med_txt_pivot$text),] #keep only non-NA values
+
+## separate multiple letters in the same string
+med_txt_pivot_split <- med_txt_pivot #copy df
+
+
+med_txt_pivot_split %<>%
+  separate(text, c("text1", "text2", "text3", "text4", "text5", "text6", "text7", "text8", "text9", "text10", "text11", "text12", "text13", "text14", "text15", "text16", "text17", "text18", "text19", "text20", "text21", "text22", "text23", "text24", "text25", "text26", "text27", "text28", "text29", "text30", "text31", "text32"), sep = "(?=\\>\\<\\d{1,2}\\-\\d{1,2}\\-\\d{4})") 
+
+# pivot data again to have an observation per letter
+med_txt_pivot_split_colnames <- (colnames(med_txt_pivot_split))[6:37] #get releavnt colnames
+
+med_txt_pivot_split %<>% ## pivot and overwrite df
+  pivot_longer(cols = all_of(med_txt_pivot_split_colnames),
+               names_to = "temp_col",
+               values_to = "text")
+med_txt_pivot_split = med_txt_pivot_split[!is.na(med_txt_pivot_split$text),] ## toss NA's
+med_txt_pivot_split = med_txt_pivot_split[nchar(med_txt_pivot_split$text) > 32,]## delete too short strings (faulty data)
+
+
+#Separate timestamp and letter type
+# <11-1-2012 06:50> <Algemeen> , 7-2-2020 09:13> <Conclusie>
+
+med_txt_pivot_split %<>% separate(text, c("timestamp", "text"), sep="> <", extra="merge") # separate timestamp
+med_txt_pivot_split = med_txt_pivot_split[nchar(med_txt_pivot_split$text) > 20, ] ## delete too short strings (faulty data)
+med_txt_pivot_split %<>% separate(text, c("text_type", "text"), sep="(?<=\\w\\>)", extra="merge") # separate letter type, only split on first encounter of sep
+med_txt_pivot_split = med_txt_pivot_split[!is.na(med_txt_pivot_split$text),] ## toss NA's
+
+backup_jeroen <- med_txt_pivot_split ### er zitten wat fouten in
+med_txt_pivot_split <- backup_jeroen
+
+med_txt_pivot_split$timestamp <- str_extract(med_txt_pivot_split$timestamp, "\\d.+") # clean timestamp
+med_txt_pivot_split$text <- str_remove(med_txt_pivot_split$text, "\\</.+") # clean text (letter type at end of text)
+med_txt_pivot_split$text_type <- str_remove(med_txt_pivot_split$text_type, "\\>")
+med_txt_pivot_split$day <- str_extract(med_txt_pivot_split$day, "\\d+") #remove "dag"from day column
+
+med_text_long_unfiltered <- med_txt_pivot_split # make back-up before deleting types of letters
+
+med_txt_pivot_split <- med_txt_pivot_split[(med_txt_pivot_split$day == "0" & med_txt_pivot_split$text_type=="Conclusie")==FALSE,] #delete Conclusie letters on day0
+med_txt_pivot_split <- med_txt_pivot_split[med_txt_pivot_split$text_type != "Behandeling" & med_txt_pivot_split$text_type != "Beleid" & med_txt_pivot_split$text_type != "Recentste bepaling" & med_txt_pivot_split$text_type != "Observaties", ] # delete other letters
+
+med_txt_pivot_split = med_txt_pivot_split[nchar(med_txt_pivot_split$text) > 6,]## delete too short strings (faulty data)
+
+#select relevant columns 
+med_txt_pivot_split <- med_txt_pivot_split[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "day", "timestamp", "text_type", "text")]
+med_text_long_unfiltered <- med_text_long_unfiltered[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "day", "timestamp", "text_type", "text")]
+
+## write table
+write.table(med_txt_pivot_split, "H:/Thesis/Data/medtext_long_filtered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+write.table(med_text_long_unfiltered, "H:/Thesis/Data/medtext_long_unfiltered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+```
+
+# verpl_txt
+after pivoting and deleting NA's, 5059 observations. Thus 5059 days on which letters were made.
+58898 observations after splitting all texts (which were saved into one string) into columns and pivotting, and deleting NA's and too short strings (faulty data)
+With the pivted data, there were many faulty values in the text_type column. They were all types of medicines. Examples:
+- <FLUCONAZOL 
+- <CARBASALAATCALCIUM
+- <OXAZEPAM
+These where deleted.went from 58001 rows to 57889.
+
+```{r}
+#pivot
+verpl_text_colnames <- colnames(verpl_txt) #save colname sin vec
+verpl_text_colnames <- verpl_text_colnames[5:19] # delete non relevant columns for pivot
+
+verpl_txt_pivot <- verpl_txt %>% 
+  pivot_longer(cols = all_of(verpl_text_colnames),
+               names_to = "day",
+               values_to = "text")
+
+verpl_txt_pivot$text[verpl_txt_pivot$text == ""] <- NA #replace empty fields with NA's
+verpl_txt_pivot = verpl_txt_pivot[!is.na(verpl_txt_pivot$text),] #keep only non-NA values
+
+
+## separate multiple letters in the same string
+verpl_txt_pivot_split <- verpl_txt_pivot #copy df
+
+
+verpl_txt_pivot_split %<>%
+  separate(text, c("text1", "text2", "text3", "text4", "text5", "text6", "text7", "text8", "text9", "text10", "text11", "text12", "text13", "text14", "text15", "text16", "text17", "text18", "text19", "text20", "text21", "text22", "text23", "text24", "text25", "text26", "text27", "text28", "text29", "text30", "text31", "text32"), sep = "(?=\\>\\<\\d{1,2}\\-\\d{1,2}\\-\\d{4})")
+
+# pivot data again to have an observation per letter
+verpl_txt_pivot_split_colnames <- (colnames(verpl_txt_pivot_split))[6:37] #get releavnt colnames
+
+verpl_txt_pivot_split <- verpl_txt_pivot_split %>% ## pivot and overwrite df
+  pivot_longer(cols = all_of(verpl_txt_pivot_split_colnames),
+               names_to = "temp_col",
+               values_to = "text")
+verpl_txt_pivot_split = verpl_txt_pivot_split[!is.na(verpl_txt_pivot_split$text),] ## toss NA's
+verpl_txt_pivot_split = verpl_txt_pivot_split[nchar(verpl_txt_pivot_split$text) > 16,]## delete too short strings (faulty data)
+
+#Separate timestamp and letter type
+# <11-1-2012 06:50> <Algemeen> , 7-2-2020 09:13> <Conclusie>
+test <- verpl_txt_pivot_split
+verpl_txt_pivot_split <- test
+
+verpl_txt_pivot_split$timestamp <- verpl_txt_pivot_split$text #copy column
+verpl_txt_pivot_split$timestamp <- str_extract(verpl_txt_pivot_split$timestamp, "\\d+-\\d+-\\d+ \\d\\d\\:\\d\\d") # extract timestamp
+verpl_txt_pivot_split$text <- str_remove(verpl_txt_pivot_split$text, "\\d+-\\d+-\\d+ \\d\\d\\:\\d\\d") # remove timestamp form text
+
+#
+verpl_txt_pivot_split %<>% separate(text, c("text_type", "text"), sep="(?<=\\w\\>)", extra="merge") # separate letter type, only split on first encounter of sep
+
+
+verpl_txt_pivot_split$text[verpl_txt_pivot_split$text == ""] <- NA #replace empty fields with NA's
+verpl_txt_pivot_split = verpl_txt_pivot_split[!is.na(verpl_txt_pivot_split$text),] ## toss NA's
+
+verpl_txt_pivot_split = verpl_txt_pivot_split[nchar(verpl_txt_pivot_split$text) > 1,]## delete too short strings (faulty data)
+verpl_txt_pivot_split = verpl_txt_pivot_split[nchar(verpl_txt_pivot_split$text_type) > 1,]## delete too short strings (faulty data)
+
+
+verpl_txt_pivot_split$text <- str_remove(verpl_txt_pivot_split$text, "\\</.+") # clean text (letter type at end of text)
+verpl_txt_pivot_split$text[verpl_txt_pivot_split$text == ""] <- NA #replace empty fields with NA's
+verpl_txt_pivot_split = verpl_txt_pivot_split[!is.na(verpl_txt_pivot_split$text),] ## toss NA's
+verpl_txt_pivot_split$text_type <- str_extract(verpl_txt_pivot_split$text_type, "\\w+\\s?\\w*\\s?\\w*")
+verpl_txt_pivot_split$day <- str_extract(verpl_txt_pivot_split$day, "\\d+") #remove "dag"from day column
+verpl_txt_pivot_split$timestamp[verpl_txt_pivot_split$timestamp == ""] <- NA
+verpl_txt_pivot_split <- verpl_txt_pivot_split[!is.na(verpl_txt_pivot_split$timestamp),] ## toss NA's
+
+verpl_txt_unfiltered <- verpl_txt_pivot_split
+
+x <- verpl_txt_pivot_split # copy df to "x" to make next command nice and tidy ;)
+verpl_txt_pivot_split <- x[x$text_type == "Activiteiten" | x$text_type == "Algemeen" | x$text_type == "Cognitie en Waarnemen" | x$text_type == "Dienst" | x$text_type == "Gezondheidsbeleving" | x$text_type == "Observaties" | x$text_type == "Slaap en Rust" | x$text_type == "Stressverwerking" | x$text_type == "Rol en Relatie" | x$text_type == "Uitscheiding" | x$text_type == "Voeding en Stofwisseling" | x$text_type == "Zelfbeleving",] #delete faulty data by keeping only valid text types
+
+#select relevant cols & rows
+verpl_txt_pivot_split <- verpl_txt_pivot_split[verpl_txt_pivot_split$text_type != "Dienst",]
+verpl_txt_pivot_split <- verpl_txt_pivot_split[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "day", "timestamp", "text_type", "text")]
+verpl_txt_unfiltered <- verpl_txt_unfiltered[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "day", "timestamp", "text_type", "text")]
+
+write.table(verpl_txt_pivot_split, "H:/Thesis/Data/verpltext_long_filtered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+write.table(verpl_txt_unfiltered, "H:/Thesis/Data/verpltext_long_unfiltered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+```
+
+# lab
+after pivot 81000 values. After deleting NA's 17570 values were left.
+
+$ types of lab values (measurements):
+- AMY
+- CRP
+- HB
+- LEUC
+```{r}
+lab_colnames <- colnames(lab) #save colname sin vec
+lab_colnames <- lab_colnames[3:182] # delete non relevant columns for pivot
+
+lab_pivot <- lab %>% 
+  pivot_longer(cols = all_of(lab_colnames),
+               names_to = "measure",
+               values_to = "value")
+
+
+lab_pivot$value[lab_pivot$value == "NULL"] <- NA #replace empty fields with NA's
+lab_pivot <- lab_pivot[!is.na(lab_pivot$value),] ## toss NA's
+
+lab_pivot %<>% separate(measure, c("measure", "day", "measure_count"), sep="_") #separate LEUC_dag1_M1 in measure, day, and measure count
+
+lab_pivot$day <- str_extract(lab_pivot$day, "\\d+") #remove "dag"from day column
+lab_pivot$day <- as.numeric(lab_pivot$day) #save as numeric
+lab_pivot$measure_count <- str_extract(lab_pivot$measure_count, "\\d+") #remove M from measure count values
+lab_pivot$measure_count <- as.numeric(lab_pivot$measure_count) #save as numeric
+
+#delete one faulty entry in for the LEUC measures
+lab_pivot <- lab_pivot[lab_pivot$value != "rect",]
+# replace non-numeric CRP values
+lab_pivot$value[lab_pivot$value == "<1" & lab_pivot$measure == "CRP"] <- "1"
+# replace non-numeric AMY values
+lab_pivot$value[lab_pivot$value == "<3" & lab_pivot$measure == "AMY"] <- "3"
+lab_pivot$value[lab_pivot$value == ">30000" & lab_pivot$measure == "AMY"] <- "30000"
+
+
+# transform operatiedatum to date value
+lab_pivot$date <- lab_pivot$Datum_operatie_nieuw # coperate operatiedate
+lab_pivot %<>% mutate(date = as.Date(date)) #convert to datetype value 
+# add day of measurement to date
+lab_pivot$date <-  lab_pivot$date + lab_pivot$day
+
+#create time values
+lab_pivot$time <- NA
+lab_pivot$time[lab_pivot$measure_count ==1] <- "08:00:00"
+lab_pivot$time[lab_pivot$measure_count ==2] <- "14:00:00"
+lab_pivot$time[lab_pivot$measure_count ==3] <- "20:00:00"
+
+# concatenate date and timestamp
+
+lab_pivot %<>%
+  mutate(timestamp = as.character(as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S")))
+
+lab_pivot <- lab_pivot[c("Case_number", "measure", "value", "timestamp","day", "measure_count")]
+
+#add missing column to lab_pivot
+case_pt_nummer <- overview[c("Case_number", "Pt_nummer")] #make index table
+lab_pivot <- merge(lab_pivot, case_pt_nummer, all.x = TRUE) #add PTnummers from index to lab_pivot
+
+dbWriteTable(con, SQL("dbo.long_lab"), lab_pivot, overwrite=TRUE, row.names=FALSE) #wrtie te db
+#test <- dbReadTable(con, "long_lab")
+
+```
+
+
+## Complication index table
+Make a table with indexes of patients and their complication date
+```{r}
+complication_indexes <- overview[c("Case_number", "Datum_operatie", "Pt_nummer", "Pneumonie_datum", "Naadlke_datum")] #copy relevant cols
+names(complication_indexes)[names(complication_indexes) == "Datum_operatie"] <- "Datum_operatie_nieuw" #change colname to be equal to the other tables
+
+complication_indexes$Pneumonie_datum <- as.Date(complication_indexes$Pneumonie_datum)
+complication_indexes$Naadlke_datum <- as.Date(complication_indexes$Naadlke_datum)
+
+complication_indexes %<>% 
+   mutate(target_date = pmin(Pneumonie_datum, Naadlke_datum, na.rm=TRUE)) #no difference in pneunia or anastomotic leakage in labeling, so put dates together and select first
+
+dbWriteTable(con, SQL("dbo.complication_indexes"), complication_indexes, overwrite=TRUE, row.names=FALSE) #write db
+test <- dbReadTable(con, "complication_indexes")
+
+```
+
+
+## Concatenate Structured Data
+```{r}
+long_structured_complete <- rbind(vitals_abp_auto_pivot, vitals_abp_man_pivot, 
+              vitals_af_auto_pivot, vitals_af_man_pivot,
+              vitals_hf_hr_auto_pivot, vitals_hf_hr_man_pivot, vitals_hf_pr_man_pivot,
+              vitals_temp_auto_pivot, vitals_temp_man_pivot,
+              lab_pivot)
+
+dbWriteTable(con, SQL("dbo.long_structured_complete"), long_structured_complete, overwrite=TRUE, row.names=FALSE) #wrtie to db
+write.table(long_structured_complete, "H:/Thesis/Data/long_structured_complete.csv", sep=";", row.names=FALSE, col.names = TRUE) #write to directory
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+

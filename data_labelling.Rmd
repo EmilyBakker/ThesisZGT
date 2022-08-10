@@ -1,0 +1,290 @@
+---
+title: "data_labelling"
+output: html_document
+---
+
+```{r}
+#read
+long_str_comp <- dbReadTable(con, "long_structured_complete")
+target_index <- dbReadTable(con, "target_index")
+full_data <- dbReadTable(con, "full_data_ids") #id's
+overview_clean <- dbReadTable(con, "overview_clean")
+#long_gastro <- read.csv("H:/Thesis/Data/gastro_long.csv", header = T, sep = "|")
+#long_med <- read.csv("H:/Thesis/Data/medtext_long_filtered.csv", sep="|", header = T, quote = "")
+#long_verpl <- read.csv("H:/Thesis/Data/verpltext_long_filtered.csv", sep="|", header=T)
+long_text_combined <- read.table("H:/Thesis/Data/long_text_complete.csv", header=TRUE, sep="|")
+```
+
+```{r}
+#select relevant columns
+#target_index <- target_index[c("Pt_nummer", "target_date")]
+target_index = merge(target_index, case_pt_nummer, by="Pt_nummer")
+
+labels = overview_clean[c("Case_number", "target")]
+dbWriteTable(con, SQL("dbo.labels"), labels, overwrite=T, row.names=F)
+write.table(labels, "H:/Thesis/Data/labels.csv", sep=";", row.names=F, col.names = T)
+```
+
+```{r}
+#merge target with data
+long_str_comp <- merge(long_str_comp, target_index, all.x = TRUE, by="Pt_nummer")
+dbWriteTable(con, SQL("dbo.long_structured_complete"), long_str_comp, overwrite=TRUE, row.names=FALSE)
+overview <- merge(overview, target_index, all.x=TRUE, by="Pt_nummer")
+dbWriteTable(con, SQL("dbo.overview"), overview, overwrite=TRUE, row.names=FALSE)
+```
+
+```{r}
+# list of all "correct patietnts was made. Filter data with that list
+test <- merge(full_data, long_str_comp, all.x = T)
+
+#make index to add correct id to data
+case_pt_nummer <- overview_clean[c("Case_number", "Pt_nummer")] #make index table
+names(case_pt_nummer)[names(case_pt_nummer) == "Datum_operatie"] <- "Datum_operatie_nieuw" #change
+
+long_gastro <- merge(case_pt_nummer, long_gastro, all.y = T, by="Datum_operatie_nieuw") #add identifiers
+long_verpl <- merge(case_pt_nummer, long_verpl, all.y = T, by="Datum_operatie_nieuw") #add identifiers
+
+# delete faulty data
+long_gastro <- merge(full_data, long_gastro, all = FALSE) #inner join
+test <- merge(full_data, long_verpl, all=FALSE, by="Pt_nummer")
+long_verpl$text[long_verpl$text == ""] <- NA
+
+test <- subset(long_med, long_med$Pt_nummer %in% x)
+
+x <- full_data$Pt_nummer
+
+write.table(verpl_txt_pivot_split, "H:/Thesis/Data/verpltext_long_filtered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+write.table(med_txt_pivot_split, "H:/Thesis/Data/medtext_long_filtered.csv", sep="|", row.names=FALSE, col.names = TRUE)
+write.table(long_gastro, "H:/Thesis/Data/gastro_long.csv", sep="|", row.names=FALSE, col.names = TRUE)
+```
+
+#merge and label text data
+```{r}
+#alter long_gastro
+names(long_gastro)[names(long_gastro) == "measure"] <- "text_type" #change
+names(long_gastro)[names(long_gastro) == "report"] <- "text" #change
+names(long_gastro)[names(long_gastro) == "date"] <- "timestamp" #change
+long_gastro <- long_gastro[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "timestamp", "text_type", "text", "measure_count")]
+
+#convert datatypes and columns before merge
+long_gastro$date
+long_gastro %<>% 
+  mutate(Pt_nummer = as.character(Pt_nummer),
+         timestamp = as.character(as.POSIXct(paste(timestamp, "12:00"), format="%Y-%m-%d %H:%M:%S")))
+#select relevant columns
+x<- long_gastro[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "timestamp", "text_type", "text")]
+y <- long_med[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "timestamp", "text_type", "text")]
+z <- long_verpl[c("Case_number", "Datum_operatie_nieuw", "Pt_nummer", "timestamp", "text_type", "text")]
+
+#merge all text data
+long_text_combined <- rbind(x,y,z)
+write.table(long_text_combined,  "H:/Thesis/Data/long_text_complete.csv", sep="|",row.names=F, col.names = T, qmethod = "double", fileEncoding="UTF-8")
+#test <- read.table("H:/Thesis/Data/long_text_complete.csv", header=TRUE, sep="|")
+
+# merge target data with correct ids
+target_index <- merge(full_data, target_index, all.x = T)
+dbWriteTable(con, SQL("dbo.target_index"), target_index,overwrite=TRUE, row.names=FALSE)
+# merge text data with target data
+long_text_combined <- merge(target_index, long_text_combined, all.x=TRUE, by="Pt_nummer")
+
+
+```
+
+#overview data
+```{r}
+overview <- merge(target_index, overview, all.x=T, by="Pt_nummer")
+overview_clean <- overview[c("Pt_nummer", "target_date", "Case_number", "Geslacht", "Datum_operatie", "operatiejaar", "Leeftijd_OK", "Lengte", "Gewicht", "ASA", "Pneumonie_datum", "Naadlke_datum")]
+dbWriteTable(con, SQL("dbo.overview_clean"), overview_clean, overwrite=T, row.names=F)
+write.table(overview_clean, "H:/Thesis/Data/overview_clean.csv", row.names=F, col.names=T, sep="|")
+```
+
+# Sampling
+#split data before sampling
+```{r}
+#long_str_comp, long_text_combined
+
+##split into complication and non-complication set
+str_comp <- long_str_comp[!is.na(long_str_comp$target_date),]
+str_nocomp <- long_str_comp[is.na(long_str_comp$target_date),]
+#split into complication and non-complication set
+txt_comp <- long_text_combined[!is.na(long_text_combined$target_date),]
+txt_nocomp <- long_text_combined[is.na(long_text_combined$target_date),]
+
+##str_comp
+#alter dates to calculate with
+str_comp %<>%
+  mutate(target_date = as.Date(target_date),
+         timestamp_cop = as.Date(timestamp))
+#calculate difference in days between observation timestamp and target date
+str_comp$days_to_target <- str_comp$target_date - str_comp$timestamp_cop
+# sample data from 24-48 hours before complication day
+str_comp_sample <- str_comp[str_comp$days_to_target > 0,] #all data from before day of complication
+#keep relevant variables
+str_comp_sample <- str_comp_sample[c("Pt_nummer","day", "timestamp", "measure", "value" )]
+#make target variable
+str_comp_sample$target <- "1"
+
+##txt_comp
+#alter dates to calculate with
+txt_comp %<>%
+  mutate(target_date = as.Date(target_date),
+         timestamp_cop = as.Date(timestamp, format = "%Y-%m-%d %H:%M"))
+#calculate difference in days between observation timestamp and target date
+txt_comp$days_to_target <- txt_comp$target_date - txt_comp$timestamp_cop
+# sample data from 24-48 hours before complication day
+txt_comp_sample <- txt_comp[txt_comp$days_to_target > 0,] #all data from before day of complication
+#keep relevan variables
+txt_comp_sample <- txt_comp_sample[c("Pt_nummer", "timestamp", "text_type", "text")]
+#make target var
+txt_comp_sample$target <- "1"
+
+#use meand and SD days to targe of comp group to sample data in equal distribution for no comp group
+#make list of complication id's
+comp_ids <- unique(str_comp_sample$Pt_nummer) #returns list of 180 vals
+overview_comp <- overview_clean[overview_clean$Pt_nummer %in% comp_ids,] #retrieve overview data for comp group
+#add traget date
+overview <- merge(overview_clean, target_index, by = "Pt_nummer")
+overview$complication_day = as.numeric(as.Date(overview$target_date) - as.Date(overview$Datum_operatie))
+
+mean_days_to_comp <- mean(overview$complication_day, na.rm=T)
+sd_days_to_comp <- sd(overview$complication_day, na.rm=T) #mean is 4.514 sd is 3.098
+
+## NO_COMPS
+#use days to sample
+#calculate day for text data
+txt_nocomp$day <- as.numeric(as.Date(txt_nocomp$timestamp) - as.Date(txt_nocomp$Datum_operatie_nieuw))
+nocomp_overview <- overview_clean[c("Pt_nummer", "target", "Datum_operatie")]
+nocomp_overview <- nocomp_overview[nocomp_overview$target=="0",]
+
+#function for generation of distribution given mean, sd, lower and upper bounds
+sampled_dist <- function(n,mean,sd,lowerBound,upperBound){
+    range <- upperBound - lowerBound
+    m <- (mean-lowerBound) / range #mapping mean to 0-1 range
+    s <- sd / range #mapping sd to 0-1 range
+    a <- (m^2 - m^3 - m*s^2)/s^2 #calculating alpha for rbeta 
+    b <- (m-2*m^2+m^3-s^2+m*s^2)/s^2 #calculating beta for rbeta
+    data <- rbeta(n,a,b)  #generating data
+    data <- lowerBound + data * range #remapping to given bounds
+    return(data)
+}
+#call function to make sample
+nocomp_days <- sampled_dist(235, mean_days_to_comp, sd_days_to_comp, 1, 14)
+nocomp_days <- round(nocomp_days, digits=0) #round from float to int
+mean(nocomp_days); sd(nocomp_days) #check mean and Sd: 4.651 and 3.172 (compared to 4.514 and 3.098)
+
+# calculate maximum day per patient
+max_days_per_id <- str_nocomp %>% 
+  group_by(Pt_nummer) %>% 
+  summarise(max = max(day))
+#merge with data
+nocomp_overview <- merge(nocomp_overview, max_days_per_id, by="Pt_nummer")
+#sort df and vector, so hight maximum days are paired with highest sampled days
+nocomp_overview <- nocomp_overview[order(nocomp_overview$max, decreasing = T),]
+nocomp_days <- sort(nocomp_days, decreasing = T)
+
+#assign vector to df
+nocomp_overview$n_days <- nocomp_days
+
+#randomize starting day of sampling
+nocomp_overview$x <- nocomp_overview$max - nocomp_overview$n_days
+nocomp_overview$start_day <- NA
+# funcion to make a sequence of 0 to x, and take a random sample
+sample_start = mapply(FUN = function(a,b){
+  sample(seq(from = a, to = b),1)
+}, a = 0, b = nocomp_overview$x)
+
+# assign randomized start days to dataframe
+nocomp_overview$start_day <- sample_start
+
+nocomp_overview$x<- NULL #clean
+
+# make end_day var by adding start day to n-days
+nocomp_overview$end_day <- nocomp_overview$n_days + nocomp_overview$start_day
+
+#add start and end day to time series data
+#make df with useful cols
+nocomp_overview_merge <- nocomp_overview[c("Pt_nummer", "start_day", "end_day")]
+#merge with text and structured data
+str_nocomp <- merge(str_nocomp, nocomp_overview_merge, by="Pt_nummer", all=T)
+txt_nocomp <- merge(txt_nocomp, nocomp_overview_merge, by="Pt_nummer", all=T)
+
+#delete all rows where day < start_day and day > end_day
+str_nocomp_sample <- str_nocomp[str_nocomp$day >= str_nocomp$start_day & str_nocomp$day <= str_nocomp$end_day,]
+txt_nocomp_sample <- txt_nocomp[txt_nocomp$day >= txt_nocomp$start_day & txt_nocomp$day <= txt_nocomp$end_day,]
+
+# add target
+str_nocomp_sample$target <- "0"
+txt_nocomp_sample$target <- "0"
+
+#merge all samples
+#clean cols Pt_nummer, timestamp, day, measure, value, target
+# clean cols Pt_nummer. timestamp, day, text_type, text, target
+str_comp_sample <- str_comp_sample[c("Case_number", "timestamp", "day", "measure", "value", "target")]
+str_nocomp_sample <- str_nocomp_sample[c("Case_number", "timestamp", "day", "measure", "value", "target")]
+
+txt_comp_sample <- txt_comp_sample[c("Case_number", "timestamp", "day", "text_type", "text", "target")]
+txt_nocomp_sample <- txt_nocomp_sample[c("Case_number", "timestamp", "day", "text_type", "text", "target")]
+
+long_structured_sampled <- rbind(str_comp_sample, str_nocomp_sample)
+long_text_sampled <- rbind(txt_comp_sample, txt_nocomp_sample)
+
+
+##### WRITE
+write.table(long_structured_sampled, "H:/Thesis/Data/long_structured_sampled.csv", sep="|", row.names=FALSE, col.names = TRUE)
+write.table(long_text_sampled, "H:/Thesis/Data/long_text_sampled.csv", sep="|", row.names=FALSE, col.names = TRUE)
+```
+
+# overview dataset  fix
+Fix from date to bool
+```{r}
+#label fix
+overview_clean$target_date[is.na(overview_clean$target_date)] <- 0
+overview_clean$target_date[overview_clean$target_date != 0] <- 1
+
+#age fix
+overview_clean$geboortedatum <- overview$Geboortedatum_nieuw
+overview_clean %<>%
+  mutate(
+    Datum_operatie = as.Date(Datum_operatie),
+    geboortedatum = as.Date(geboortedatum)
+  )
+
+#two wrong date values:
+overview_clean$geboortedatum[overview_clean$geboortedatum == "2047-02-06"] <- "1947-02-06"
+overview_clean$geboortedatum[overview_clean$geboortedatum == "2044-08-14"] <- "1944-08-14"
+
+overview_clean$Leeftijd_OK <- trunc(as.numeric(difftime(overview_clean$Datum_operatie, overview_clean$geboortedatum, units="weeks"))/52.25) #calculate age
+
+```
+
+```{r}
+long_text_combined$timestamp <- as.character(long_text_combined$timestamp)
+long_text_combined[long_text_combined$text_type == "gastro",] %<>%  mutate(timestamp = as.character(paste(timestamp, "12:00:00")))
+long_text_combined[long_text_combined$text_type != "gastro",] %<>% mutate(timestamp = as.character(as.POSIXct(as.POSIXct(timestamp, format="%d-%m-%Y %H:%M"), format = "%Y-%m-%d %H:%M")))
+write.table(long_text_combined,  "H:/Thesis/Data/long_text_complete.csv", sep="|",row.names=F, col.names = T, qmethod = "double", fileEncoding="UTF-8")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

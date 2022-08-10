@@ -1,0 +1,117 @@
+---
+title: "data_cleaning"
+output: pdf_document
+---
+
+```{r}
+vitals_abp_man_pivot <- dbReadTable(con, "long_vitals_abp_man")
+vitals_abp_auto_pivot <- dbReadTable(con, "long_vitals_abp_auto")
+vitals_af_auto_pivot <- dbReadTable(con, "long_vitals_af_auto")
+vitals_af_man_pivot <- dbReadTable(con, "long_vitals_af_man")
+vitals_hf_hr_auto_pivot <- dbReadTable(con, "long_vitals_hf_hr_auto")
+vitals_hf_hr_man_pivot <- dbReadTable(con, "long_vitals_hf_hr_man")
+vitals_hf_pr_man_pivot <- dbReadTable(con, "long_vitals_hf_pr_man")
+#vitals_rr_auto_pivot <- dbReadTable(con, "long_vitals_rr_auto")
+#vitals_rr_man_pivot <- dbReadTable(con, "long_vitals_rr_man")
+vitals_temp_auto_pivot <- dbReadTable(con, "long_vitals_temp_auto")
+vitals_temp_man_pivot <- dbReadTable(con, "long_vitals_temp_man")
+lab_pivot <- dbReadTable(con, "long_lab")
+long_str_comp <- dbReadTable(con, "long_structured_complete")
+```
+
+
+
+# vitals_abp_man_pivot
+started with 9629.Ended with 9511. 
+```{r}
+summary(vitals_abp_man_pivot)
+hist(vitals_abp_man_pivot$value)
+boxplot(vitals_abp_man_pivot$value)
+
+#delete values > 200 and < 30
+vitals_abp_man_pivot <- vitals_abp_man_pivot[vitals_abp_man_pivot$value < 201,]
+vitals_abp_man_pivot <- vitals_abp_man_pivot[vitals_abp_man_pivot$value > 39,]
+vitals_abp_man_pivot <- vitals_abp_man_pivot[!is.na(vitals_abp_man_pivot$value),]
+## write table
+dbWriteTable(con, SQL("dbo.long_vitals_abp_man"), vitals_abp_man_pivot, overwrite=TRUE, row.names=FALSE)
+# <- dbReadTable(con, "long_vitals_abp_man")
+```
+
+# vitals_abp_auto_pivot
+started with 16994.ended with 16787.
+```{r}
+summary(vitals_abp_auto_pivot)
+
+vitals_abp_auto_pivot <- vitals_abp_auto_pivot[vitals_abp_auto_pivot$value < 201,]
+vitals_abp_auto_pivot <- vitals_abp_auto_pivot[vitals_abp_auto_pivot$value > 39,]
+vitals_abp_auto_pivot <- vitals_abp_auto_pivot[!is.na(vitals_abp_auto_pivot$value),]
+
+dbWriteTable(con, SQL("dbo.long_vitals_abp_auto"), vitals_abp_auto_pivot, overwrite=TRUE, row.names=FALSE)
+```
+
+#  vitals_af_man_pivot
+started with 18043 ended with 
+```{r}
+summary(vitals_af_auto_pivot)
+
+vitals_af_man_pivot <- vitals_af_man_pivot[vitals_af_man_pivot$value < 41,]
+vitals_af_man_pivot <- vitals_af_man_pivot[vitals_af_man_pivot$value > 5,]
+vitals_af_auto_pivot <- vitals_af_auto_pivot[vitals_af_auto_pivot$value < 41,]
+vitals_af_auto_pivot <- vitals_af_auto_pivot[vitals_af_auto_pivot$value > 5,]
+
+dbWriteTable(con, SQL("dbo.long_vitals_af_auto"), vitals_af_auto_pivot, overwrite=TRUE, row.names=FALSE)
+dbWriteTable(con, SQL("dbo.long_vitals_af_man"), vitals_af_man_pivot, overwrite=TRUE, row.names=FALSE)
+```
+
+```{r}
+test <- rbind(vitals_af_auto_pivot, vitals_af_man_pivot)
+ggplot(test, aes(x=value, fill=measure))+
+  geom_boxplot()
+
+```
+## vitals_hf_hr_
+```{r}
+summary(vitals_hf_hr_auto_pivot); summary(vitals_hf_hr_man_pivot); summary(vitals_hf_pr_man_pivot)
+
+vitals_hf_hr_auto_pivot <- vitals_hf_hr_auto_pivot[vitals_hf_hr_auto_pivot$value < 221,]
+vitals_hf_hr_auto_pivot <- vitals_hf_hr_auto_pivot[vitals_hf_hr_auto_pivot$value > 29,]
+vitals_hf_hr_man_pivot <- vitals_hf_hr_man_pivot[vitals_hf_hr_man_pivot$value < 221,]
+vitals_hf_hr_man_pivot <- vitals_hf_hr_man_pivot[vitals_hf_hr_man_pivot$value > 29,]
+vitals_hf_pr_man_pivot <- vitals_hf_pr_man_pivot[vitals_hf_pr_man_pivot$value > 29,]
+vitals_hf_pr_man_pivot <- vitals_hf_pr_man_pivot[vitals_hf_pr_man_pivot$value < 221,]
+
+dbWriteTable(con, SQL("dbo.long_vitals_hf_hr_auto"), vitals_hf_hr_auto_pivot, overwrite=TRUE, row.names=FALSE)
+dbWriteTable(con, SQL("dbo.long_vitals_hf_hr_man"), vitals_hf_hr_man_pivot, overwrite=TRUE, row.names=FALSE)
+dbWriteTable(con, SQL("dbo.long_vitals_hf_pr_man"), vitals_hf_pr_man_pivot, overwrite=TRUE, row.names=FALSE)
+```
+
+```{r}
+test <- rbind(vitals_hf_hr_auto_pivot, vitals_hf_hr_man_pivot, vitals_hf_pr_man_pivot)
+ggplot(test, aes(x=value, fill=measure))+
+  geom_boxplot()
+```
+## TEMP
+```{r}
+summary(vitals_temp_auto_pivot); summary(vitals_temp_man_pivot)
+
+vitals_temp_auto_pivot <- vitals_temp_auto_pivot[vitals_temp_auto_pivot$value > 33.9 & vitals_temp_auto_pivot$value < 43,]
+vitals_temp_man_pivot <- vitals_temp_man_pivot[vitals_temp_man_pivot$value > 33.9 & vitals_temp_man_pivot$value < 43,]
+
+dbWriteTable(con, SQL("dbo.long_vitals_temp_auto"), vitals_temp_auto_pivot, overwrite=TRUE, row.names =FALSE)
+dbWriteTable(con, SQL("dbo.long_vitals_temp_man"), vitals_temp_man_pivot, overwrite=TRUE, row.names =FALSE)
+```
+
+##LAb
+```{r}
+#lab_pivot <- dbReadTable(con, "long_lab") #was already done
+```
+
+```{r}
+long_str_comp$measure[long_str_comp$measure == "HF_PR_manual"] <- "HF_HR_man"
+dbWriteTable(con, SQL("dbo.long_structured_complete"), long_str_comp, overwrite=TRUE, row.names=FALSE)
+```
+
+```{r}
+
+```
+

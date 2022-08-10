@@ -1,0 +1,148 @@
+---
+title: "EDA"
+output: html_document
+---
+```{r}
+summary(overview_clean)
+```
+
+
+
+```{r}
+# impute missing values ASA
+overview_clean$ASA[overview_clean$ASA == 999] <- median(overview_clean$ASA)
+# change var name
+names(overview_clean)[names(overview_clean) == "target_date"] <- "target" #change
+
+#impute missing values to calculate BMI
+avg_len_m <- round(mean(overview_clean$Lengte[overview_clean$Geslacht == 0 & overview_clean$Lengte != 999]), digits = 0)
+avg_len_f <- round(mean(overview_clean$Lengte[overview_clean$Geslacht == 1 & overview_clean$Lengte != 999]), digits = 0)
+#for males
+overview_clean$Lengte[overview_clean$Geslacht == 0 & overview_clean$Lengte == 999] <- avg_len_m
+overview_clean$Lengte[overview_clean$Geslacht == 1 & overview_clean$Lengte == 999] <- avg_len_f
+
+# same for weight
+avg_weight_m <- round(mean(overview_clean$Gewicht[overview_clean$Geslacht == 0 & overview_clean$Gewicht != 999]), digits = 0)
+avg_weight_f <- round(mean(overview_clean$Gewicht[overview_clean$Geslacht == 1 & overview_clean$Gewicht != 999]), digits = 0)
+
+overview_clean$Gewicht[overview_clean$Geslacht == 0 & (overview_clean$Gewicht > 200 | overview_clean$Gewicht < 38)] <- avg_weight_m
+overview_clean$Gewicht[overview_clean$Geslacht == 1 & (overview_clean$Gewicht > 200 | overview_clean$Gewicht < 38)] <- avg_weight_f
+
+dbWriteTable(con, SQL("dbo.overview_clean"), overview_clean, overwrite=T, row.names=F)
+write.table(overview_clean, "H:/Thesis/Data/overview_clean.csv", row.names=F, col.names=T, sep="|")
+
+```
+
+#fix target date
+```{r}
+target_index$target_date[target_index$target_date == "2019-07-02"] <- "2020-07-02"
+target_index$target_date[target_index$target_date == "2015-03-08"] <- "2016-03-08"
+target_index$target_date[target_index$target_date == "2020-03-20"] <- "2019-03-20"
+```
+
+
+# Days to complication
+Originally, 182 people have a complication, 226 dont. However, 9 patients had complications after they have been fired from the hospital, with a maximum of 42 after surgery. Patients that dont have a complication within 14 days, are labelled as no complication. 
+```{r}
+overview_clean <- merge(overview_clean, target_index, by = "Pt_nummer")
+overview_clean %<>%
+  mutate(complication_day = as.numeric(as.Date(target_date) - as.Date(Datum_operatie)))
+
+mean(overview_clean$complication_day, na.rm=T); sd(overview_clean$complication_day, na.rm=T)
+summary(overview_clean$complication_day)
+
+# some peaople have a recorded complication after 14 days these should be included as non-complication
+overview_clean$target[overview_clean$complication_day > 14] <- "0"
+#show division of labels
+table(overview_clean$target)
+
+#correct labels in other datasets
+# correct target index table
+new_targets <- overview_clean[c("Pt_nummer", "target")]
+#merge labels with target_index table
+target_index <- merge(target_index, new_targets, by="Pt_nummer")
+#change date values for patients who no longer have complication
+target_index$target_date[target_index$target == "0"] <- NA
+# delete label column from target_index table for more convenient use later on
+target_index <- target_index[c("Pt_nummer", "target_date")]
+```
+
+```{r}
+
+```
+
+
+
+Convert date variables from chracter to datetime
+```{r}
+overview %<>%
+  mutate(Geboortedatum_nieuw = as.POSIXct(Geboortedatum_nieuw, format="%Y-%m-%d"),
+         Datum_operatie_nieuw = as.POSIXct(Datum_operatie_nieuw, format="%Y-%m-%d"),
+         Datum_controleren = as.POSIXct(Datum_controleren, format="%Y-%m-%d"),
+         Laatste_poli_controle_nieuw = as.POSIXct(Laatste_poli_controle_nieuw, format="%Y-%m-%d"),
+         Datum_metastaseren = as.POSIXct(Datum_metastaseren, format="%Y-%m-%d"),
+         Daum_overlijden_nieuw = as.POSIXct(Daum_overlijden_nieuw, format="%Y-%m-%d"),
+         Geslacht = as.character(Geslacht),
+         operatiejaar = as.character(operatiejaar),
+         cT = as.character(cT),
+         cN = as.character(cN),
+         cM = as.character(cM),
+         WHO = as.character(WHO),
+         ASA= as.character(ASA),
+         DM = as.character(DM),
+         Hypertensie = as.character(Hypertensie),
+         COPD = as.character(COPD),
+         Cardiaal_belast = as.character(Cardiaal_belast),
+         Delier = as.character(Delier),
+         Pneumonie = as.character(Pneumonie),
+         Hernia_Diafragmatica = as.character(Hernia_Diafragmatica),
+         Recurrens_letsel = as.character(Recurrens_letsel),
+         Naadlekkage = as.character(Naadlekkage),
+         Ongecompliceerd = as.character(Ongecompliceerd),
+         Reoperatie = as.character(Reoperatie),
+         Reinterventie_radiologisch = as.character(Reinterventie_radiologisch),
+         Reinterventie_scopisch = as.character(Reinterventie_scopisch),
+         Klasse_3_complicatie = as.character(Klasse_3_complicatie),
+         Overleden = as.character(Overleden),
+         Overlijden_30_dagen = as.character(Overlijden_30_dagen),
+         Overlijden_90_dagen = as.character(Overlijden_90_dagen),
+         Overlijden_in_hospital = as.character(Overlijden_in_hospital))
+
+```
+
+```{r}
+overview$Daum_overlijden_nieuw[0:2]
+```
+
+```{r}
+prop.table(table(overview$Pneumonie))
+prop.table(table(overview$Naadlekkage))
+```
+
+```{r}
+## Make BMI
+overview$Lengte = overview$Lengte/100
+overview$BMI = round(overview$Gewicht/(overview$Lengte**2), digits = 1)
+```
+
+```{r}
+prop.table(table(overview$Geslacht))
+```
+
+```{r}
+## age
+overview_clean %>% 
+  summarise(mean_age = mean(Leeftijd_OK, na.rm=T),
+            sd_age = sd(Leeftijd_OK, na.rm=T))
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+getmode(overview_clean$complication_day[!is.na(overview_clean$complication_day)])
+```
+
+```{r}
+ggplot(overview_clean, aes(x=complication_day)) + geom_bar(bins=14, binwidth = 0.8, color="deepskyblue4", fill="deepskyblue4") + scale_x_discrete(name="Day of Complication", limits = c('1',"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"))
+  
+```
+
